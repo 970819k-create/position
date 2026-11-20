@@ -1,0 +1,1431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>위치데이터 분석기</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --bg:#f5f6f8; --panel:#ffffff; --text:#1d2330; --muted:#6b7280; --line:#e3e6eb;
+  --accent:#2563eb; --accent-soft:#e8efff; --danger:#dc2626; --row-hover:#f3f6fb;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11141a; --panel:#1a1f28; --text:#e6e9ef; --muted:#9aa3b2; --line:#2b313d;
+    --accent:#5b8cff; --accent-soft:#1f2a44; --danger:#f87171; --row-hover:#222937;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11141a; --panel:#1a1f28; --text:#e6e9ef; --muted:#9aa3b2; --line:#2b313d;
+  --accent:#5b8cff; --accent-soft:#1f2a44; --danger:#f87171; --row-hover:#222937;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:16px;margin:0 12px 0 0;font-weight:700}
+button,select,input{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--panel);padding:6px 12px;border-radius:6px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.small{padding:3px 8px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+select,input[type=text],input[type=number]{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:5px 8px}
+.spacer{flex:1}
+.muted{color:var(--muted)}
+main{display:grid;grid-template-columns:300px 1fr;grid-template-rows:minmax(360px,55vh) auto;gap:12px;padding:12px 16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.side{grid-row:1 / span 2;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.side h2,.panel h2{font-size:13px;margin:0 0 8px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.field label{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+#map{height:100%;min-height:360px;border-radius:10px;border:1px solid var(--line)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--bg);border-radius:8px;padding:8px}
+.stat b{display:block;font-size:18px}
+.stat span{font-size:12px;color:var(--muted)}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:16px;text-align:center;cursor:pointer;color:var(--muted)}
+#drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:2px 8px;font-size:12px;display:flex;gap:6px;align-items:center}
+.chip button{border:0;background:none;color:inherit;cursor:pointer;padding:0;font-size:13px}
+.bottom{grid-column:2;display:flex;flex-direction:column;min-height:300px}
+.table-wrap{overflow:auto;max-height:420px;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;background:var(--panel);z-index:2;user-select:none}
+th .th{display:flex;align-items:center;gap:4px}
+th .name{cursor:pointer;flex:1}
+th .fbtn{border:1px solid var(--line);background:var(--panel);border-radius:4px;width:20px;height:20px;line-height:16px;padding:0;cursor:pointer;font-size:10px}
+th .fbtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--row-hover)}
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+/* filter popup (excel autofilter style) */
+#fpop{position:fixed;z-index:2000;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.18);width:280px;padding:10px;display:none}
+#fpop .list{max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:6px;padding:4px;margin:6px 0}
+#fpop .list label{display:flex;gap:6px;align-items:center;padding:2px 4px;font-size:13px;cursor:pointer}
+#fpop .list label:hover{background:var(--row-hover)}
+#fpop .list .cnt{margin-left:auto;color:var(--muted);font-size:11px}
+#fpop .sec{border-top:1px solid var(--line);padding-top:6px;margin-top:6px}
+#fpop input[type=text],#fpop input[type=number]{width:100%}
+.legend{max-height:160px;overflow:auto;font-size:12px}
+.legend div{display:flex;align-items:center;gap:6px;margin:2px 0}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.chart-box{height:200px}
+.hour-box{height:110px}
+/* 탭 */
+.tabs{display:flex;gap:4px}
+.tab{border:1px solid var(--line);background:var(--panel);padding:5px 12px;border-radius:6px;cursor:pointer;font-weight:600;color:var(--muted)}
+.tab.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tab .badge{font-size:11px;font-weight:500;opacity:.85}
+/* 동선 */
+.tk-start{width:18px;height:18px;border-radius:50%;color:#fff;font:700 10px/18px sans-serif;text-align:center;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tk-num{min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#0f172a;color:#fff;font:700 10px/18px sans-serif;text-align:center;border:1.5px solid #fff}
+.tk-arrow{font-size:12px;line-height:12px;text-align:center;text-shadow:0 0 2px #fff,0 0 2px #fff}
+#trackTbl tbody tr.on{background:var(--accent-soft)}
+.track-detail{margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px}
+.track-detail h3{margin:0 0 6px;font-size:14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.kv{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;margin-bottom:8px}
+.kv b{font-weight:600}
+/* 값 범위 슬라이더 */
+.fp-hist{display:flex;align-items:flex-end;gap:1px;height:36px;margin-top:6px}
+.fp-hist div{flex:1;background:#cbd5e1;border-radius:1px 1px 0 0;min-height:1px}
+.fp-hist div.in{background:var(--accent)}
+.dual{position:relative;height:22px}
+.dual input[type=range]{position:absolute;left:0;right:0;top:2px;width:100%;margin:0;pointer-events:none;background:none;-webkit-appearance:none;appearance:none;height:18px}
+.dual input[type=range]::-webkit-slider-runnable-track{height:4px;background:var(--line);border-radius:2px}
+.dual input[type=range]::-moz-range-track{height:4px;background:var(--line);border-radius:2px}
+.dual input[type=range]::-webkit-slider-thumb{pointer-events:auto;-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);margin-top:-6px;cursor:pointer}
+.dual input[type=range]::-moz-range-thumb{pointer-events:auto;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid #fff;cursor:pointer}
+.empty{padding:24px;text-align:center;color:var(--muted)}
+/* 표적 아이콘 · 레이더 */
+.tgt-icon,.radar-icon{background:none;border:0}
+.tgt-icon svg{display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.45))}
+.radar-icon svg{display:block;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))}
+.radar-icon .sweep{transform-origin:18px 18px;animation:sweep 3s linear infinite}
+@keyframes sweep{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.radar-icon .sweep{animation:none}}
+.radar-label{background:#0f172a;color:#4ade80;border:0;font-weight:700;font-size:11px;padding:1px 5px;box-shadow:none}
+.radar-label::before{display:none}
+.legend svg{flex:none}
+.site-list{margin-top:6px;font-size:13px}
+.site-list div{display:flex;align-items:center;gap:6px;padding:4px;border-radius:6px;cursor:pointer}
+.site-list div:hover{background:var(--row-hover)}
+.site-list div.on{background:var(--accent-soft)}
+.site-list div.off span{opacity:.5}
+.sw{position:relative;width:34px;height:18px;flex:none;cursor:pointer}
+.sw input{opacity:0;width:0;height:0;position:absolute}
+.sw i{position:absolute;inset:0;background:#cbd5e1;border-radius:999px;transition:background .15s}
+.sw i::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.sw input:checked+i{background:#16a34a}
+.sw input:checked+i::after{transform:translateX(16px)}
+.sw input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}
+.radar-label.off{background:#475569;color:#e2e8f0}
+.site-list .cnt{margin-left:auto;color:var(--muted);font-size:12px}
+@media (max-width:900px){
+  main{grid-template-columns:1fr;grid-template-rows:auto;padding:12px 16px}
+  .side{grid-row:auto}
+  .bottom{grid-column:1}
+  #map{height:60vh}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>📍 위치데이터 분석기</h1>
+  <input type="file" id="file" accept=".xlsx,.xls,.csv" multiple hidden>
+  <input type="file" id="siteFile" accept=".xlsx,.xls,.csv" hidden>
+  <button class="btn primary" id="openBtn">엑셀/CSV 불러오기</button>
+  <button class="btn" id="siteBtn">레이더 기지 불러오기</button>
+  <button class="btn" id="sampleBtn">샘플 데이터</button>
+  <select id="sheetSel" style="display:none"></select>
+  <span class="spacer"></span>
+  <button class="btn" id="exportXlsx" disabled>필터 결과 엑셀 저장</button>
+  <button class="btn" id="exportCsv" disabled>CSV 저장</button>
+</header>
+
+<main>
+  <aside class="panel side">
+    <section>
+      <div id="drop">여기로 파일을 끌어다 놓으세요<br><small>.xlsx · .xls · .csv</small></div>
+    </section>
+
+    <section>
+      <h2>컬럼 매핑</h2>
+      <div class="field"><label>위도 (Latitude)</label><select id="latCol"></select></div>
+      <div class="field"><label>경도 (Longitude)</label><select id="lngCol"></select></div>
+      <div class="field"><label>아이콘 구분 (표적 종류)</label><select id="iconCol"></select></div>
+      <div class="field"><label>색상 구분 (범주)</label><select id="catCol"></select></div>
+      <div class="field"><label>가중치 (히트맵·합계)</label><select id="weightCol"></select></div>
+      <div class="field"><label>팝업 제목</label><select id="labelCol"></select></div>
+    </section>
+
+    <section>
+      <h2>시간대 · 기간</h2>
+      <div class="field"><label>시간 컬럼</label><select id="timeCol"></select></div>
+      <div class="field"><label>시간대 (예: 01:00 ~ 03:00, 22:00 ~ 02:00처럼 자정을 넘겨도 됨)</label>
+        <div class="row"><input type="time" id="tStart" style="flex:1;min-width:0"> ~ <input type="time" id="tEnd" style="flex:1;min-width:0"></div>
+      </div>
+      <div class="row" style="gap:4px">
+        <button class="btn small" data-preset="0-6">새벽 0–6</button>
+        <button class="btn small" data-preset="6-12">오전 6–12</button>
+        <button class="btn small" data-preset="12-18">오후 12–18</button>
+        <button class="btn small" data-preset="18-24">저녁 18–24</button>
+        <button class="btn small" data-preset="22-2">심야 22–2</button>
+      </div>
+      <div class="hour-box" style="margin-top:8px"><canvas id="hourChart"></canvas></div>
+      <div class="muted" style="font-size:11px">막대 클릭: 그 시간 선택 · Shift+클릭: 범위 확장</div>
+      <div class="field" style="margin-top:8px"><label>기간 (날짜)</label>
+        <div class="row"><input type="date" id="dFrom" style="flex:1;min-width:0"> ~ <input type="date" id="dTo" style="flex:1;min-width:0"></div>
+      </div>
+      <div class="row">
+        <button class="btn small primary" id="timeApply">적용</button>
+        <button class="btn small" id="timeClear">시간·기간 해제</button>
+      </div>
+      <div class="muted" id="timeInfo" style="font-size:12px;margin-top:4px"></div>
+    </section>
+
+    <section>
+      <h2>지도 표시</h2>
+      <div class="field"><label>배경지도</label>
+        <select id="baseSel">
+          <option value="vw_base">브이월드 기본 (키 필요)</option>
+          <option value="vw_sat">브이월드 위성 (키 필요)</option>
+          <option value="vw_hybrid">브이월드 위성+지명 (키 필요)</option>
+          <option value="vw_white">브이월드 백지도 (키 필요)</option>
+          <option value="esri">Esri 도로지도 (키 불필요)</option>
+          <option value="esri_topo">Esri 지형도 (키 불필요)</option>
+          <option value="esri_gray">Esri 회색지도 (키 불필요)</option>
+          <option value="esri_sat">Esri 위성 (키 불필요)</option>
+          <option value="none">배경 없음 (오프라인)</option>
+        </select>
+      </div>
+      <div class="field" id="vwKeyWrap"><label>브이월드 API 키 <a href="https://www.vworld.kr/dev/v4dv_apikey_s001.do" target="_blank" rel="noopener" style="color:var(--accent)">발급</a></label>
+        <div class="row"><input type="text" id="vwKey" placeholder="API 키 입력" style="flex:1;min-width:0"><button class="btn small" id="vwKeyBtn">적용</button></div>
+      </div>
+      <div class="row">
+        <label><input type="radio" name="mode" value="cluster" checked> 클러스터</label>
+        <label><input type="radio" name="mode" value="points"> 점</label>
+        <label><input type="radio" name="mode" value="heat"> 히트맵</label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn small" id="fitBtn">전체 보기</button>
+        <button class="btn small" id="boundsBtn">현재 화면으로 필터</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label title="2회 이상 이어진 동선에 속한 탐지만 남기고 단발 탐지는 숨김"><input type="checkbox" class="pathOnly"> 이동 경로 있는 것만 보기</label>
+      </div>
+      <div class="legend" id="legend" style="margin-top:8px"></div>
+    </section>
+
+    <section>
+      <h2>반경 분석</h2>
+      <div class="row">
+        <input type="number" id="radiusKm" value="1" min="0.05" step="0.1" style="width:80px"> km
+        <button class="btn small" id="radiusBtn">지도 클릭으로 중심 지정</button>
+      </div>
+      <div class="muted" id="radiusInfo" style="font-size:12px;margin-top:4px"></div>
+    </section>
+
+    <section>
+      <h2>레이더 기지</h2>
+      <div id="siteInfo" class="muted" style="font-size:12px">기지 파일(예: sensor_sites.csv)을 함께 불러오면 레이더와 탐지범위가 표시됩니다.</div>
+      <div class="row" id="siteOpts" style="margin-top:6px;display:none">
+        <label><input type="checkbox" id="showSites" checked> 기지</label>
+        <label><input type="checkbox" id="showCoverage" checked> 탐지범위</label>
+        <button class="btn small" id="clearSites">제거</button>
+      </div>
+      <div class="row" id="siteBulk" style="margin-top:6px;display:none">
+        <button class="btn small" id="allOn">모두 켜기</button>
+        <button class="btn small" id="allOff">모두 끄기</button>
+      </div>
+      <div id="siteList" class="site-list"></div>
+    </section>
+
+    <section>
+      <h2>적용된 필터</h2>
+      <div class="chips" id="chips"><span class="muted">없음</span></div>
+      <div class="row" style="margin-top:6px"><button class="btn small" id="clearAll">모든 필터 해제</button></div>
+    </section>
+
+    <section>
+      <h2>요약</h2>
+      <div class="stats">
+        <div class="stat"><b id="sTotal">0</b><span>전체 행</span></div>
+        <div class="stat"><b id="sFiltered">0</b><span>필터 결과</span></div>
+        <div class="stat"><b id="sValid">0</b><span>좌표 유효</span></div>
+        <div class="stat"><b id="sWeight">-</b><span>가중치 합계</span></div>
+      </div>
+      <div class="muted" id="sCenter" style="font-size:12px;margin-top:6px"></div>
+    </section>
+
+    <section>
+      <h2>범주 분포</h2>
+      <div class="chart-box"><canvas id="chart"></canvas></div>
+    </section>
+  </aside>
+
+  <div id="map"></div>
+
+  <section class="panel bottom">
+    <div class="row" style="margin-bottom:8px">
+      <div class="tabs">
+        <button class="tab on" data-tab="table">데이터 테이블</button>
+        <button class="tab" data-tab="track">동선 분석 <span class="badge" id="trackBadge"></span></button>
+      </div>
+      <span class="muted" id="tblInfo"></span>
+      <span class="spacer"></span>
+      <input type="text" id="globalSearch" placeholder="전체 검색…" style="width:200px">
+    </div>
+    <div id="tab-table">
+      <div class="table-wrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+      <div class="pager">
+        <select id="pageSize"><option>50</option><option selected>100</option><option>500</option></select>
+        <button class="btn small" id="prevPg">‹ 이전</button>
+        <span id="pgInfo" class="muted"></span>
+        <button class="btn small" id="nextPg">다음 ›</button>
+      </div>
+    </div>
+    <div id="tab-track" style="display:none">
+      <div class="row" style="margin-bottom:6px">
+        <label>트랙 기준 <select id="trackCol"></select></label>
+        <label id="gapWrap">최대 간격 <input type="number" id="trackGap" value="60" min="1" style="width:64px">분</label>
+        <label>최소 <input type="number" id="trackMin" value="2" min="1" style="width:52px">회 이상</label>
+        <label><input type="checkbox" id="trackShow" checked> 지도에 동선</label>
+        <label title="2회 이상 이어진 동선에 속한 탐지만 남기고 단발 탐지는 숨김"><input type="checkbox" class="pathOnly"> <b>이동 경로 있는 것만</b></label>
+        <span class="spacer"></span>
+        <button class="btn small" id="trackExport">동선 요약 엑셀 저장</button>
+      </div>
+      <div class="muted" id="trackInfo" style="font-size:12px;margin-bottom:6px"></div>
+      <div class="table-wrap" style="max-height:300px"><table id="trackTbl"><thead><tr>
+        <th>트랙</th><th>종류</th><th>탐지 횟수</th><th>최초 탐지</th><th>최초 탐지 레이더 · 위치</th><th>마지막 탐지</th><th>지속</th><th>이동거리</th><th>평균속도</th><th>거친 레이더</th>
+      </tr></thead><tbody></tbody></table></div>
+      <div id="trackDetail"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Excel-style autofilter popup -->
+<div id="fpop">
+  <div class="row" style="justify-content:space-between"><b id="fpTitle"></b><button class="btn small" id="fpClose">✕</button></div>
+  <div class="row" style="margin-top:6px">
+    <button class="btn small" id="fpSortAsc">오름차순 ↑</button>
+    <button class="btn small" id="fpSortDesc">내림차순 ↓</button>
+  </div>
+  <div class="sec">
+    <input type="text" id="fpSearch" placeholder="값 검색 (목록 내)">
+    <div class="row" style="margin-top:4px">
+      <button class="btn small" id="fpAll">모두 선택</button>
+      <button class="btn small" id="fpNone">모두 해제</button>
+      <button class="btn small" id="fpOnlyVisible">검색결과만</button>
+    </div>
+    <div class="list" id="fpList"></div>
+    <div class="muted" style="font-size:11px">Shift+클릭: 사이에 있는 값을 한 번에 체크/해제</div>
+  </div>
+  <div class="sec">
+    <div class="field"><label>텍스트 포함</label><input type="text" id="fpContains" placeholder="예: 강남"></div>
+    <div id="fpNumWrap" class="field"><label>숫자 범위 — 슬라이더로 한 번에 지정</label>
+      <div class="fp-hist" id="fpHist"></div>
+      <div class="dual"><input type="range" id="fpLo" min="0" max="1000" value="0" aria-label="최소"><input type="range" id="fpHi" min="0" max="1000" value="1000" aria-label="최대"></div>
+      <div class="row" style="justify-content:space-between;font-size:11px"><span class="muted" id="fpLoLbl"></span><b id="fpRangeCnt"></b><span class="muted" id="fpHiLbl"></span></div>
+      <div class="row"><input type="number" id="fpMin" placeholder="최소" style="width:48%"><input type="number" id="fpMax" placeholder="최대" style="width:48%"></div>
+    </div>
+  </div>
+  <div class="row" style="justify-content:flex-end;margin-top:8px">
+    <button class="btn small" id="fpReset">이 열 필터 해제</button>
+    <button class="btn small primary" id="fpApply">적용</button>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const PALETTE = ['#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5','#0d9488','#9333ea'];
+const OTHER_COLOR = '#9ca3af';
+const BLANK = '(빈 값)';
+
+const state = {
+  wb: null, rows: [], cols: [], numericCols: new Set(),
+  filters: {},          // col -> {values:Set|null, contains:'', min:null, max:null}
+  bounds: null,         // L.LatLngBounds filter
+  radius: null,         // {lat,lng,km}
+  search: '',
+  sort: null,           // {col, dir}
+  filtered: [], page: 0,
+  sites: null, siteOff: new Set(), offLink: "",
+  trackOnly: null,      // {id, ids:Set(__id)} 특정 동선만 보기
+  pathOnly: false,      // 이동 경로(2회 이상 동선)에 속한 탐지만
+  pathIds: null,        // pathOnly일 때 남길 행 __id
+  trackFocus: null,     // 강조 중인 트랙 ID
+  time: null,           // {start, end, hourOnly} 하루 중 분
+  date: null,           // {from, to} 'YYYY-MM-DD'
+};
+
+/* ---------- Map ---------- */
+const map = L.map('map', {preferCanvas:true, maxZoom:19, minZoom:3}).setView([37.5665,126.978], 11);
+/* 배경지도: OSM 공식 타일은 로컬 파일(file://)에서 열면 차단되므로 사용하지 않음 */
+const store = {get:k=>{try{return localStorage.getItem(k)}catch(_){return null}}, set:(k,v)=>{try{localStorage.setItem(k,v)}catch(_){}}};
+const VW_ATTR = '&copy; <a href="https://www.vworld.kr" target="_blank">VWorld</a> 국토교통부';
+const ESRI = s => `https://server.arcgisonline.com/ArcGIS/rest/services/${s}/MapServer/tile/{z}/{y}/{x}`;
+const BASEMAPS = {
+  vw_base:   {vw:true, url:'https://api.vworld.kr/req/wmts/1.0.0/{key}/Base/{z}/{y}/{x}.png', opt:{maxZoom:19, minZoom:6, attribution:VW_ATTR}},
+  vw_sat:    {vw:true, url:'https://api.vworld.kr/req/wmts/1.0.0/{key}/Satellite/{z}/{y}/{x}.jpeg', opt:{maxZoom:19, minZoom:6, attribution:VW_ATTR}},
+  vw_hybrid: {vw:true, url:'https://api.vworld.kr/req/wmts/1.0.0/{key}/Satellite/{z}/{y}/{x}.jpeg', overlay:'https://api.vworld.kr/req/wmts/1.0.0/{key}/Hybrid/{z}/{y}/{x}.png', opt:{maxZoom:19, minZoom:6, attribution:VW_ATTR}},
+  vw_white:  {vw:true, url:'https://api.vworld.kr/req/wmts/1.0.0/{key}/white/{z}/{y}/{x}.png', opt:{maxZoom:18, minZoom:6, attribution:VW_ATTR}},
+  // Esri 타일: API 키·도메인 등록 없이 로컬 파일(file://)에서도 동작
+  esri:      {url:ESRI('World_Street_Map'), opt:{maxZoom:19, attribution:'Tiles &copy; Esri'}},
+  esri_topo: {url:ESRI('World_Topo_Map'), opt:{maxZoom:19, attribution:'Tiles &copy; Esri'}},
+  esri_gray: {url:ESRI('Canvas/World_Light_Gray_Base'), overlay:ESRI('Canvas/World_Light_Gray_Reference'), opt:{maxZoom:16, attribution:'Tiles &copy; Esri'}},
+  esri_sat:  {url:ESRI('World_Imagery'), overlay:ESRI('Reference/World_Boundaries_and_Places'), opt:{maxZoom:19, attribution:'Tiles &copy; Esri'}},
+  none:      {url:null},
+};
+const FALLBACK = ['esri', 'esri_topo', 'esri_gray', 'none'];  // 지도 로딩 실패 시 자동 전환 순서
+let baseLayers = [];
+function setBasemap(id, auto){
+  let key = (store.get('vworldKey') || '').trim();
+  if (!BASEMAPS[id] || (BASEMAPS[id].vw && !key)) id = 'esri';  // 키가 없으면 키 불필요 지도로
+  const b = BASEMAPS[id];
+  baseLayers.forEach(l => map.removeLayer(l)); baseLayers = [];
+  map.getContainer().style.background = id === 'none' ? '#eef1f5' : '';
+  $('baseSel').value = id;
+  if (!auto) store.set('basemap', id);
+  if (!b.url) return;
+  const tl = L.tileLayer(b.url, Object.assign({key}, b.opt));
+  let ok = 0, err = 0;
+  tl.on('tileload', () => ok++);
+  tl.on('tileerror', () => {
+    if (!baseLayers.includes(tl) || ++err !== 4 || ok > 0) return;
+    if (b.vw) { alert('브이월드 지도를 불러오지 못했습니다.\nAPI 키와 키 발급 시 등록한 서비스 URL(도메인)을 확인하세요.\n키 불필요 지도(Esri)로 전환합니다.'); setBasemap('esri', true); return; }
+    const next = FALLBACK[FALLBACK.indexOf(id) + 1] || 'none';
+    setBasemap(next, true);
+  });
+  baseLayers.push(tl.addTo(map));
+  if (b.overlay) baseLayers.push(L.tileLayer(b.overlay, Object.assign({key}, b.opt)).addTo(map));
+  baseLayers.forEach(l => l.bringToBack());
+}
+$('vwKey').value = store.get('vworldKey') || '';
+$('baseSel').onchange = e => {
+  if (BASEMAPS[e.target.value].vw && !(store.get('vworldKey')||'').trim()) { alert('브이월드 지도는 API 키가 필요합니다. 아래에 키를 입력하고 적용을 눌러주세요.'); $('vwKey').focus(); }
+  setBasemap(e.target.value);
+};
+$('vwKeyBtn').onclick = () => {
+  store.set('vworldKey', $('vwKey').value.trim());
+  const cur = $('baseSel').value;
+  setBasemap(BASEMAPS[cur].vw ? cur : 'vw_base');
+};
+setBasemap(store.get('basemap') || ((store.get('vworldKey')||'').trim() ? 'vw_base' : 'esri'));
+let layer = null, radiusCircle = null, pickingCenter = false;
+
+/* ---------- File loading ---------- */
+$('openBtn').onclick = () => $('file').click();
+$('drop').onclick = () => $('file').click();
+$('siteBtn').onclick = () => $('siteFile').click();
+$('file').onchange = e => { handleFiles(e.target.files); e.target.value = ''; };
+$('siteFile').onchange = e => { handleFiles(e.target.files, true); e.target.value = ''; };
+['dragenter','dragover'].forEach(ev => $('drop').addEventListener(ev, e => {e.preventDefault(); $('drop').classList.add('over');}));
+['dragleave','drop'].forEach(ev => $('drop').addEventListener(ev, e => {e.preventDefault(); $('drop').classList.remove('over');}));
+document.body.addEventListener('dragover', e => e.preventDefault());
+document.body.addEventListener('drop', e => { e.preventDefault(); handleFiles(e.dataTransfer.files); });
+
+/* 여러 파일 동시 처리: 레이더 기지 파일은 자동 인식해서 기지 레이어로, 나머지는 분석 데이터로 */
+async function handleFiles(files, forceSites){
+  for (const file of [...files]) {
+    try {
+      const wb = await parseFile(file);
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:'', raw:true});
+      if (forceSites || looksLikeSites(raw, file.name)) setSites(raw, file.name);
+      else loadWorkbook(wb);
+    } catch(err){ console.error(err.stack); alert(`${file.name} 파일을 읽지 못했습니다: ${err.message}`); }
+  }
+}
+function parseFile(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        if (/\.csv$/i.test(file.name)) {
+          // UTF-8 우선, 깨지면 EUC-KR (한글 CSV)
+          let text = new TextDecoder('utf-8').decode(data);
+          if (text.includes('�')) { try { text = new TextDecoder('euc-kr').decode(data); } catch(_){} }
+          resolve(XLSX.read(text.replace(/^\uFEFF/, ''), {type:'string', raw:true}));   // CSV는 글자 그대로 (날짜 자동변환·시간대 밀림 방지)
+        } else resolve(XLSX.read(data, {type:'array', cellDates:true}));
+      } catch(err){ reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+const RANGE_RE = /coverage|range|radius|탐지(범위|거리|반경)|반경|범위/i;
+function looksLikeSites(raw, name){
+  const cols = Object.keys(raw[0] || {});
+  const hasClass = cols.some(c => /class|표적|종류|target/i.test(c));
+  return !hasClass && (cols.some(c => RANGE_RE.test(c)) || /site|radar|sensor_site|레이더|기지/i.test(name));
+}
+
+function loadWorkbook(wb){
+  state.wb = wb;
+  const sel = $('sheetSel');
+  sel.innerHTML = wb.SheetNames.map(n => `<option>${esc(n)}</option>`).join('');
+  sel.style.display = wb.SheetNames.length > 1 ? '' : 'none';
+  loadSheet(wb.SheetNames[0]);
+}
+$('sheetSel').onchange = e => loadSheet(e.target.value);
+
+function loadSheet(name){
+  const ws = state.wb.Sheets[name];
+  const raw = XLSX.utils.sheet_to_json(ws, {defval:'', raw:true});
+  setData(raw);
+}
+
+function setData(raw){
+  const cols = [];
+  raw.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  state.rows = raw.map((r,i) => { const o = {__id:i}; cols.forEach(c => o[c] = normVal(r[c])); return o; });
+  state.cols = cols;
+  state.numericCols = new Set(cols.filter(c => {
+    let n = 0, num = 0;
+    for (const r of state.rows) { const v = r[c]; if (v === '' ) continue; n++; if (typeof v === 'number') num++; if (n > 500) break; }
+    return n > 0 && num / n > 0.9;
+  }));
+  state.filters = {}; state.bounds = null; state.radius = null; state.sort = null; state.search = ''; state.page = 0;
+  state.time = null; state.date = null; hourAnchor = null; state.trackOnly = null; state.trackFocus = null; setPathOnly(false, true); ['tStart','tEnd','dFrom','dTo'].forEach(id => $(id).value = '');
+  $('globalSearch').value = '';
+  if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; }
+  setupColumnSelects();
+  $('exportXlsx').disabled = $('exportCsv').disabled = false;
+  apply(true);
+}
+
+function normVal(v){
+  if (v instanceof Date) {               // 엑셀 날짜: 로컬 시각 그대로 (UTC 변환 시 9시간 밀림 방지)
+    const d = new Date(Math.round(v.getTime() / 1000) * 1000), p2 = n => String(n).padStart(2, '0');
+    const ymd = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`, hms = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
+    if (d.getFullYear() < 1901) return hms.slice(0, 5);            // 시간만 있는 셀 (예: 01:30)
+    return hms === '00:00:00' ? ymd : `${ymd} ${hms}`;
+  }
+  if (typeof v === 'string') { const t = v.trim(); if (t !== '' && /^-?\d+(\.\d+)?$/.test(t.replace(/,/g,''))) return Number(t.replace(/,/g,'')); return t; }
+  return v ?? '';
+}
+
+function guessCol(patterns){
+  for (const p of patterns) { const c = state.cols.find(c => p.test(String(c).trim())); if (c) return c; }
+  return '';
+}
+function setupColumnSelects(){
+  const opts = (allowNone) => (allowNone ? '<option value="">(없음)</option>' : '<option value="">선택…</option>') +
+    state.cols.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  ['latCol','lngCol','catCol','iconCol','weightCol','labelCol','timeCol'].forEach(id => $(id).innerHTML = opts(id !== 'latCol' && id !== 'lngCol'));
+  $('timeCol').value = guessTimeCol();
+  $('trackCol').innerHTML = '<option value="">(사용 안 함)</option><option value="__auto">자동 연결 (추정)</option>' +
+    state.cols.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  $('trackCol').value = guessTrackCol() || ($('timeCol').value ? '__auto' : '');
+  $('iconCol').value = guessCol([/^(target_class|표적종류|표적|target|class|종류|기종)$/i, /class|표적|target|종류/i]);
+  $('latCol').value = guessCol([/^(위도|lat|latitude|y좌표|y)$/i, /위도|lat/i]);
+  $('lngCol').value = guessCol([/^(경도|lng|lon|long|longitude|x좌표|x)$/i, /경도|lng|lon/i]);
+  const nonNum = state.cols.filter(c => !state.numericCols.has(c));
+  const catGuess = nonNum.find(c => { const u = new Set(state.rows.map(r => r[c])).size; return u > 1 && u <= 30; });
+  $('catCol').value = $('iconCol').value || guessCol([/업종|분류|구분|카테고리|category|type|유형/i]) || catGuess || '';
+  $('labelCol').value = guessCol([/^(이름|명칭|상호|상호명|지점명|name|title)$/i, /명$|name/i, /_id$|^id$/i]) || nonNum[0] || '';
+  $('weightCol').value = guessCol([/매출|금액|수량|인구|count|amount|value|weight|confidence|신뢰/i]);
+  if (state.numericCols.has($('catCol').value) && $('catCol').value === $('latCol').value) $('catCol').value = '';
+}
+['latCol','lngCol','catCol','iconCol','weightCol','labelCol'].forEach(id => $(id).onchange = () => apply(true));
+$('timeCol').onchange = () => apply(false);
+
+/* ---------- 시간대 · 기간 ---------- */
+const TIME_RE = /(\d{1,2}):(\d{2})(?::\d{2})?/, DATE_RE = /(\d{4})[-./](\d{1,2})[-./](\d{1,2})/;
+function isHourCol(c){ return state.numericCols.has(c) && state.rows.every(r => r[c] === '' || (Number.isInteger(r[c]) && r[c] >= 0 && r[c] <= 23)); }
+function guessTimeCol(){
+  const sample = c => state.rows.slice(0, 50).map(r => r[c]).filter(v => v !== '');
+  const timeLike = state.cols.filter(c => { const v = sample(c); return v.some(x => TIME_RE.test(String(x))) && v.every(x => typeof x === 'string' && (TIME_RE.test(x) || DATE_RE.test(x))); });
+  const byName = timeLike.find(c => /timestamp|datetime|time|일시|시각|시간|탐지/i.test(c));
+  if (byName || timeLike[0]) return byName || timeLike[0];
+  return state.cols.find(c => /^(hour|hh|시|시간대|탐지시)$/i.test(c) && isHourCol(c)) || '';
+}
+/* 행의 하루 중 분(0~1439), 시 단위 컬럼이면 hourOnly 표시 */
+function minuteOf(r){
+  const c = $('timeCol').value; if (!c) return null;
+  const v = r[c];
+  if (typeof v === 'number') return Number.isInteger(v) && v >= 0 && v <= 23 ? v * 60 : null;
+  const m = TIME_RE.exec(String(v));
+  if (!m) return DATE_RE.test(String(v)) ? 0 : null;                 // 날짜만 있으면 00:00
+  const h = +m[1], mi = +m[2]; return h <= 24 && mi < 60 ? (h % 24) * 60 + mi : null;
+}
+function dateOf(r){
+  const c = $('timeCol').value; if (!c) return null;
+  const m = DATE_RE.exec(String(r[c])); return m ? `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}` : null;
+}
+const toMin = s => { const m = /^(\d{1,2}):(\d{2})/.exec(s || ''); return m ? (+m[1] % 24) * 60 + +m[2] : null; };
+const fmtMin = m => `${String(Math.floor(m/60) % 24).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+function inTime(t){
+  const {start:S, end:E, hourOnly} = state.time;
+  if (S === E) return true;                                            // 같은 시각이면 하루 전체
+  const le = (a, b) => hourOnly ? a < b : a <= b;                      // 시 단위 데이터는 끝 시각 미포함 (01~03시 → 1시, 2시)
+  return S < E ? (t >= S && le(t, E)) : (t >= S || le(t, E));          // 자정 넘김 (예: 22:00~02:00)
+}
+function passTime(r){
+  if (state.time) { const t = minuteOf(r); if (t == null || !inTime(t)) return false; }
+  if (state.date) {
+    const d = dateOf(r); if (!d) return false;
+    if (state.date.from && d < state.date.from) return false;
+    if (state.date.to && d > state.date.to) return false;
+  }
+  return true;
+}
+function setTime(start, end){
+  const c = $('timeCol').value;
+  if (!c) { alert('시간 컬럼을 먼저 선택하세요.'); return; }
+  if (start == null || end == null) { state.time = null; }
+  else state.time = {start, end, hourOnly: typeof state.rows.find(r => r[c] !== '')?.[c] === 'number'};
+  $('tStart').value = start == null ? '' : fmtMin(start); $('tEnd').value = end == null ? '' : fmtMin(end);
+  apply(false);
+}
+$('timeApply').onclick = () => {
+  const S = toMin($('tStart').value), E = toMin($('tEnd').value);
+  if ((S == null) !== (E == null)) { alert('시작과 끝 시각을 모두 입력하세요.'); return; }
+  const from = $('dFrom').value, to = $('dTo').value;
+  state.date = from || to ? {from, to} : null;
+  setTime(S, E);
+};
+$('tStart').onkeydown = $('tEnd').onkeydown = e => { if (e.key === 'Enter') $('timeApply').click(); };
+$('timeClear').onclick = () => { state.time = null; state.date = null; ['tStart','tEnd','dFrom','dTo'].forEach(id => $(id).value = ''); apply(false); };
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+  const [a, z] = b.dataset.preset.split('-').map(Number); setTime(a * 60, (z % 24) * 60);
+});
+let hourChart = null, hourAnchor = null;
+function renderHourChart(){
+  const counts = new Array(24).fill(0), has = !!$('timeCol').value;
+  if (has) state.rows.forEach(r => {           // 시간대 필터만 빼고 나머지 조건을 적용한 분포
+    if (!passAll(r, null, true)) return;
+    const t = minuteOf(r); if (t != null) counts[Math.floor(t / 60)]++;
+  });
+  const sel = h => state.time && (state.time.start === state.time.end || (state.time.hourOnly ? inTime(h * 60) : (inTime(h * 60 + 1) || inTime(h * 60 + 58))));
+  const css = getComputedStyle(document.documentElement), accent = css.getPropertyValue('--accent').trim() || '#2563eb';
+  const data = {labels: counts.map((_, h) => String(h)), datasets: [{data: counts, borderRadius: 2,
+    backgroundColor: counts.map((_, h) => !state.time || sel(h) ? accent : 'rgba(148,163,184,.45)')}]};
+  if (hourChart) { hourChart.data = data; hourChart.update('none'); }
+  else hourChart = new Chart($('hourChart'), {type: 'bar', data, options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: {legend: {display: false}, tooltip: {callbacks: {title: i => `${i[0].label}시 대`, label: i => `${i.raw.toLocaleString()}건`}}},
+    scales: {x: {ticks: {color: css.getPropertyValue('--muted'), font: {size: 9}, maxRotation: 0, autoSkip: true, autoSkipPadding: 2}, grid: {display: false}},
+             y: {ticks: {color: css.getPropertyValue('--muted'), font: {size: 9}, maxTicksLimit: 3}, grid: {color: css.getPropertyValue('--line')}}},
+    onClick: (e, els) => {
+      if (!els.length) return;
+      const h = els[0].index;
+      if (e.native && e.native.shiftKey && hourAnchor != null) setTime(hourAnchor * 60, ((h + 1) % 24) * 60);   // 처음 누른 시간부터 (자정 넘김 포함)
+      else { hourAnchor = h; setTime(h * 60, ((h + 1) % 24) * 60); }
+    }
+  }});
+  const n = state.filtered.length;
+  $('timeInfo').textContent = !has ? '시간 정보가 있는 컬럼이 없습니다.' :
+    (state.time || state.date) ? `선택: ${state.time ? fmtMin(state.time.start) + ' ~ ' + fmtMin(state.time.end) : '전체 시간'}${state.date ? ` · ${state.date.from || '처음'} ~ ${state.date.to || '끝'}` : ''} → ${n.toLocaleString()}건` : '';
+}
+
+/* ---------- 동선(트랙) 분석 ---------- */
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  $('tab-table').style.display = t.dataset.tab === 'table' ? '' : 'none';
+  $('tab-track').style.display = t.dataset.tab === 'track' ? '' : 'none';
+});
+function guessTrackCol(){
+  return state.cols.find(c => /track|트랙|항적.?id|target_?id|표적.?(id|번호)|mmsi|callsign|호출부호|선박명|선명|vessel|ship_?name|object_?id|obj_?id/i.test(c) && !/event|sensor|radar/i.test(c)) || '';
+}
+function guessSpeedCol(){ return state.cols.find(c => state.numericCols.has(c) && /speed|속도|knot|노트|sog/i.test(c)) || ''; }
+function sensorCol(){ return siteLinkCol() || state.cols.find(c => /sensor|radar|레이더|센서/i.test(c)) || ''; }
+/* 날짜+시각 → ms (시각 없으면 null) */
+function tsOf(r){
+  const c = $('timeCol').value; if (!c) return null;
+  const v = String(r[c]), d = DATE_RE.exec(v); if (!d) return null;
+  const t = /(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(v.slice(d.index + d[0].length));
+  return new Date(+d[1], +d[2] - 1, +d[3], t ? +t[1] : 0, t ? +t[2] : 0, t && t[3] ? +t[3] : 0).getTime();
+}
+const DIRS = ['북','북북동','북동','동북동','동','동남동','남동','남남동','남','남남서','남서','서남서','서','서북서','북서','북북서'];
+function bearing(a1, o1, a2, o2){
+  const d = Math.PI / 180, y = Math.sin((o2 - o1) * d) * Math.cos(a2 * d);
+  const x = Math.cos(a1 * d) * Math.sin(a2 * d) - Math.sin(a1 * d) * Math.cos(a2 * d) * Math.cos((o2 - o1) * d);
+  return (Math.atan2(y, x) / d + 360) % 360;
+}
+const p2 = n => String(n).padStart(2, '0');
+const fmtTs = ms => { if (ms == null) return '-'; const d = new Date(ms); return `${p2(d.getMonth()+1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
+const fmtDur = ms => { if (!ms) return '-'; const m = Math.round(ms / 60000); return m < 60 ? `${m}분` : m < 1440 ? `${Math.floor(m/60)}시간 ${m%60}분` : `${Math.floor(m/1440)}일 ${Math.floor(m%1440/60)}시간`; };
+/* 최초 탐지 위치 설명: 탐지 레이더 기준 방위·거리 */
+function whereFrom(r){
+  const ll = rowLatLng(r), sc = sensorCol(), sid = sc ? String(r[sc]) : '';
+  const coord = `${ll[0].toFixed(4)}, ${ll[1].toFixed(4)}`;
+  const S = state.sites;
+  if (!S) return sid ? `${sid} · ${coord}` : coord;
+  let site = S.rows.find(x => String(x[S.idC]) === sid);
+  if (!site) site = S.rows.reduce((b, x) => !b || haversine(ll[0], ll[1], +x[S.latC], +x[S.lngC]) < haversine(ll[0], ll[1], +b[S.latC], +b[S.lngC]) ? x : b, null);
+  const sl = [+site[S.latC], +site[S.lngC]];
+  const km = haversine(sl[0], sl[1], ll[0], ll[1]), dir = DIRS[Math.round(bearing(sl[0], sl[1], ll[0], ll[1]) / 22.5) % 16];
+  return `${String(site[S.idC])} 기준 ${dir} ${km.toFixed(1)}km` + (sid && sid !== String(site[S.idC]) ? ` (탐지: ${sid})` : '');
+}
+let tracks = [];
+function computeTracks(base){
+  const mode = $('trackCol').value; if (!mode) return [];
+  // "이 동선만 보기"와 무관하게 같은 트랙 ID가 유지되도록, 그 조건만 빼고 계산
+  const rows = base.filter(r => rowLatLng(r));
+  const ts = new Map(rows.map(r => [r, tsOf(r)]));
+  let groups = [];
+  if (mode !== '__auto') {                         // ID 컬럼으로 묶기 (정확)
+    const m = new Map();
+    rows.forEach(r => { if (r[mode] === '') return; const k = String(r[mode]); if (!m.has(k)) m.set(k, []); m.get(k).push(r); });
+    groups = [...m.entries()].map(([id, pts]) => ({id, pts: pts.sort((a, b) => (ts.get(a) ?? 0) - (ts.get(b) ?? 0) || a.__id - b.__id)}));
+  } else {                                         // 자동 연결 (추정): 같은 종류 + 시간 간격 + 속도로 도달 가능한 거리
+    const gap = Math.max(1, Number($('trackGap').value) || 60) * 60000, sp = guessSpeedCol(), cls = $('iconCol').value;
+    const sorted = rows.filter(r => ts.get(r) != null).sort((a, b) => ts.get(a) - ts.get(b));
+    let open = [];
+    for (const r of sorted) {
+      const t = ts.get(r), ll = rowLatLng(r);
+      open = open.filter(g => t - g.lastT <= gap);
+      let best = null, bd = Infinity;
+      for (const g of open) {
+        const last = g.pts[g.pts.length - 1];
+        if (cls && String(last[cls]) !== String(r[cls])) continue;
+        const v = sp ? Math.max(Number(last[sp]) || 0, Number(r[sp]) || 0) : 50;   // knots (속도 컬럼 없으면 50kn 가정)
+        const allowed = v * 1.852 * (t - g.lastT) / 3600000 * 1.5 + 3;               // km, 여유 50% + 3km
+        const d = haversine(ll[0], ll[1], g.lastLL[0], g.lastLL[1]);
+        if (d <= allowed && d < bd) { bd = d; best = g; }
+      }
+      if (!best) { best = {id: '', pts: []}; groups.push(best); open.push(best); }
+      best.pts.push(r); best.lastT = t; best.lastLL = ll;
+    }
+  }
+  const sc = sensorCol(), ic = $('iconCol').value, minN = Math.max(1, Number($('trackMin').value) || 1);
+  groups = groups.filter(g => g.pts.length >= minN);
+  if (mode === '__auto') groups.forEach((g, i) => g.id = 'T-' + String(i + 1).padStart(3, '0'));   // 최초 탐지 시각 순 번호
+  const out = groups.map(g => {
+    const p = g.pts, t0 = ts.get(p[0]), t1 = ts.get(p[p.length - 1]);
+    let dist = 0; for (let i = 1; i < p.length; i++) { const a = rowLatLng(p[i-1]), b = rowLatLng(p[i]); dist += haversine(a[0], a[1], b[0], b[1]); }
+    const dur = t0 != null && t1 != null ? t1 - t0 : 0;
+    return {id: g.id, pts: p, ts, n: p.length, t0, t1, dur, dist, cls: ic ? p[0][ic] : '',
+      shape: ic ? shapeOf(p[0][ic]) : null, sensors: sc ? [...new Set(p.map(r => String(r[sc])))] : [],
+      kn: dur > 0 ? dist / 1.852 / (dur / 3600000) : null};
+  }).sort((a, b) => b.n - a.n || (a.t0 ?? 0) - (b.t0 ?? 0));
+  return out;
+}
+let allTracks = [];
+/* 이동 경로만 보기 켜기/끄기 (사이드바·동선 탭 체크박스 동기화) */
+function setPathOnly(on, silent){
+  if (on && !$('trackCol').value) {
+    if ($('timeCol').value) $('trackCol').value = '__auto';
+    else { alert('이동 경로를 만들려면 동선 탭의 트랙 기준(ID 컬럼) 또는 날짜·시각 컬럼이 필요합니다.'); on = false; }
+  }
+  state.pathOnly = on;
+  document.querySelectorAll('.pathOnly').forEach(c => c.checked = on);
+  if (!silent) apply(false);
+}
+document.querySelectorAll('.pathOnly').forEach(c => c.onchange = () => setPathOnly(c.checked));
+map.createPane('trackMarkPane').style.zIndex = 640;
+const trackLayer = L.featureGroup().addTo(map);
+function trackColor(t){ return t.shape ? TYPE_COLOR[t.shape] : PALETTE[0]; }
+function drawTracks(){
+  trackLayer.clearLayers();
+  if (!$('trackShow').checked) return;
+  const focus = state.trackFocus;
+  const list = focus ? [...tracks.filter(t => t.id !== focus), ...tracks.filter(t => t.id === focus)] : tracks;
+  list.slice(-400).forEach(t => {
+    if (t.n < 2 && t.id !== focus) return;
+    const on = t.id === focus, dim = focus && !on, color = trackColor(t);
+    const lls = t.pts.map(rowLatLng);
+    const line = L.polyline(lls, {color, weight: on ? 5 : 2.5, opacity: dim ? .12 : on ? .95 : .75, dashArray: t.shape === 'unknown' ? '5 5' : null}).addTo(trackLayer);
+    line.on('click', () => focusTrack(t.id));
+    line.bindTooltip(`${esc(t.id)} · ${esc(t.cls)} · ${t.n}회`, {sticky: true});
+    if (dim) return;
+    // 출발점
+    L.marker(lls[0], {pane: 'trackMarkPane', icon: L.divIcon({className: '', html: `<div class="tk-start" style="background:${color}">S</div>`, iconSize: [22, 22], iconAnchor: [11, 11]})})
+      .bindTooltip(`${esc(t.id)} 최초 탐지 ${fmtTs(t.t0)}`).on('click', () => focusTrack(t.id)).addTo(trackLayer);
+    // 진행 방향 화살표
+    for (let i = 1; i < lls.length; i++) {
+      const a = lls[i-1], b = lls[i], deg = bearing(a[0], a[1], b[0], b[1]);
+      L.marker([(a[0]+b[0])/2, (a[1]+b[1])/2], {pane: 'trackMarkPane', interactive: false,
+        icon: L.divIcon({className: 'tk-arrow', html: `<div style="transform:rotate(${deg}deg);color:${color}">▲</div>`, iconSize: [12, 12], iconAnchor: [6, 6]})}).addTo(trackLayer);
+    }
+    if (on) t.pts.forEach((r, i) => {          // 강조 트랙은 탐지 순번 표시
+      L.marker(lls[i], {pane: 'trackMarkPane', icon: L.divIcon({className: '', html: `<div class="tk-num">${i + 1}</div>`, iconSize: [20, 18], iconAnchor: [10, 24]})})
+        .bindPopup(() => popupHtml(r)).addTo(trackLayer);
+    });
+  });
+}
+function renderTracks(){
+  tracks = state.trackOnly ? allTracks.filter(t => t.id === state.trackOnly.id) : allTracks;
+  if (state.trackFocus && !tracks.some(t => t.id === state.trackFocus)) state.trackFocus = null;
+  const mode = $('trackCol').value;
+  $('gapWrap').style.display = mode === '__auto' ? '' : 'none';
+  $('trackBadge').textContent = mode ? `(${tracks.length})` : '';
+  const linked = tracks.reduce((s, t) => s + t.n, 0);
+  $('trackInfo').innerHTML = !mode ? '트랙 기준을 고르세요. 같은 표적을 나타내는 ID 컬럼(예: track_id, MMSI, 선박명)이 있으면 그걸 고르고, 없으면 "자동 연결 (추정)"을 쓰세요.'
+    : mode === '__auto' && !state.filtered.some(r => tsOf(r) != null) ? '자동 연결에는 날짜·시각이 있는 시간 컬럼이 필요합니다 (시간대 · 기간의 "시간 컬럼").'
+    : `트랙 ${tracks.length.toLocaleString()}개 · 포함된 탐지 ${linked.toLocaleString()}건` +
+      (mode === '__auto' ? ` — 같은 ${esc($('iconCol').value || '종류')}이고 ${esc($('trackGap').value)}분 안에 ${guessSpeedCol() ? esc(guessSpeedCol()) + ' 기준으로' : '50노트 가정으로'} 도달 가능한 거리면 같은 표적으로 추정 (실제 ID가 아니므로 참고용)` : ` — ${esc(mode)} 기준`) +
+      ' · 행을 누르면 지도에서 강조';
+  $('trackTbl').querySelector('tbody').innerHTML = tracks.slice(0, 500).map(t => `<tr data-track="${esc(t.id)}" class="${t.id === state.trackFocus ? 'on' : ''}">
+    <td><b>${esc(t.id)}</b></td>
+    <td>${t.shape ? svgIcon(t.shape, trackColor(t), 14) : ''} ${esc(t.cls)}</td>
+    <td><b>${t.n}</b>회</td>
+    <td>${fmtTs(t.t0)}</td>
+    <td title="${esc(whereFrom(t.pts[0]))}">${esc(whereFrom(t.pts[0]))}</td>
+    <td>${fmtTs(t.t1)}</td>
+    <td>${fmtDur(t.dur)}</td>
+    <td>${t.dist.toFixed(1)}km</td>
+    <td>${t.kn != null ? t.kn.toFixed(1) + 'kn' : '-'}</td>
+    <td>${esc(t.sensors.join(' → '))}</td></tr>`).join('') ||
+    `<tr><td colspan="10" class="empty">${mode ? '조건에 맞는 동선이 없습니다. 최소 횟수를 낮추거나 최대 간격을 늘려보세요.' : ''}</td></tr>`;
+  renderTrackDetail();
+  drawTracks();
+}
+function renderTrackDetail(){
+  const t = tracks.find(x => x.id === state.trackFocus), el = $('trackDetail');
+  if (!t) { el.innerHTML = ''; return; }
+  const sc = sensorCol(), sp = guessSpeedCol();
+  const rows = t.pts.map((r, i) => {
+    const prev = t.pts[i-1], ll = rowLatLng(r), pll = prev && rowLatLng(prev);
+    const gap = prev && t.ts.get(r) != null && t.ts.get(prev) != null ? fmtDur(t.ts.get(r) - t.ts.get(prev)) : '-';
+    const mv = pll ? haversine(pll[0], pll[1], ll[0], ll[1]).toFixed(1) + 'km' : '-';
+    return `<tr data-ev="${r.__id}"><td><b>${i + 1}</b></td><td>${esc(fmtTs(t.ts.get(r)))}</td><td>${sc ? esc(r[sc]) : ''}</td>
+      <td>${ll[0].toFixed(5)}, ${ll[1].toFixed(5)}</td><td>${sp ? esc(r[sp]) : ''}</td><td>${gap}</td><td>${mv}</td><td>${$('labelCol').value ? esc(r[$('labelCol').value]) : ''}</td></tr>`;
+  }).join('');
+  el.innerHTML = `<div class="track-detail">
+    <h3>${t.shape ? svgIcon(t.shape, trackColor(t), 18) : ''} ${esc(t.id)} <span class="muted" style="font-weight:400">${esc(t.cls)}</span>
+      <span class="spacer"></span>
+      <button class="btn small" id="trackOnlyBtn">${state.trackOnly && state.trackOnly.id === t.id ? '전체 데이터로 돌아가기' : '이 동선만 보기'}</button>
+      <button class="btn small" id="trackUnfocus">강조 해제</button></h3>
+    <div class="kv"><span>탐지 <b>${t.n}회</b></span><span>최초 <b>${fmtTs(t.t0)}</b> · ${esc(whereFrom(t.pts[0]))}</span>
+      <span>마지막 <b>${fmtTs(t.t1)}</b> · ${esc(whereFrom(t.pts[t.n-1]))}</span><span>지속 <b>${fmtDur(t.dur)}</b></span>
+      <span>이동 <b>${t.dist.toFixed(1)}km</b></span>${t.kn != null ? `<span>평균 <b>${t.kn.toFixed(1)}kn</b></span>` : ''}</div>
+    <div class="table-wrap" style="max-height:220px"><table><thead><tr><th>#</th><th>시각</th><th>레이더</th><th>위치</th><th>${sp ? esc(sp) : '속도'}</th><th>이전 탐지와 간격</th><th>이동</th><th>${esc($('labelCol').value || '')}</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+  $('trackUnfocus').onclick = () => { state.trackFocus = null; renderTracks(); };
+  $('trackOnlyBtn').onclick = () => {
+    if (state.trackOnly && state.trackOnly.id === t.id) state.trackOnly = null;
+    else state.trackOnly = {id: t.id, ids: new Set(t.pts.map(r => r.__id))};
+    apply(false);
+  };
+}
+function focusTrack(id){
+  state.trackFocus = state.trackFocus === id ? null : id;
+  renderTracks();
+  const t = tracks.find(x => x.id === state.trackFocus);
+  if (t) {
+    map.fitBounds(L.latLngBounds(t.pts.map(rowLatLng)).pad(0.3), {maxZoom: 13});
+    document.querySelector('.tab[data-tab="track"]').click();
+  }
+}
+$('trackTbl').addEventListener('click', e => { const tr = e.target.closest('tr[data-track]'); if (tr) focusTrack(tr.dataset.track); });
+$('trackDetail').addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-ev]'); if (!tr) return;
+  const r = state.rows[+tr.dataset.ev], ll = rowLatLng(r);
+  map.setView(ll, Math.max(map.getZoom(), 12)); L.popup().setLatLng(ll).setContent(popupHtml(r)).openOn(map);
+});
+let lastTrackParams = '';
+$('trackCol').onchange = $('trackGap').onchange = $('trackMin').onchange = () => {
+  const k = [$('trackCol').value, $('trackGap').value, $('trackMin').value].join('|');
+  if (k === lastTrackParams) return;           // 값이 그대로면 다시 계산하지 않음
+  lastTrackParams = k;
+  state.trackFocus = null; state.trackOnly = null;
+  if (!$('trackCol').value && state.pathOnly) setPathOnly(false, true);
+  apply(false);
+};
+$('trackShow').onchange = drawTracks;
+$('trackExport').onclick = () => {
+  const aoa = [['트랙','종류','탐지 횟수','최초 탐지','최초 위치','마지막 탐지','마지막 위치','지속(분)','이동거리(km)','평균속도(kn)','거친 레이더']];
+  tracks.forEach(t => aoa.push([t.id, t.cls, t.n, fmtTs(t.t0), whereFrom(t.pts[0]), fmtTs(t.t1), whereFrom(t.pts[t.n-1]),
+    Math.round(t.dur / 60000), +t.dist.toFixed(2), t.kn != null ? +t.kn.toFixed(1) : '', t.sensors.join(' → ')]));
+  const det = [['트랙','순번', ...state.cols]];
+  tracks.forEach(t => t.pts.forEach((r, i) => det.push([t.id, i + 1, ...state.cols.map(c => r[c])])));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), '동선요약');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(det), '동선상세');
+  XLSX.writeFile(wb, `동선분석_${stamp()}.xlsx`);
+};
+
+/* ---------- Filtering ---------- */
+function rowLatLng(r){
+  const lat = Number(r[$('latCol').value]), lng = Number(r[$('lngCol').value]);
+  if (!isFinite(lat) || !isFinite(lng) || r[$('latCol').value] === '' || r[$('lngCol').value] === '') return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return [lat, lng];
+}
+function key(v){ return v === '' || v == null ? BLANK : String(v); }
+
+function passColFilter(r, col, f){
+  const v = r[col];
+  if (f.values && !f.values.has(key(v))) return false;
+  if (f.contains && !String(v).toLowerCase().includes(f.contains.toLowerCase())) return false;
+  if (f.min != null && !(typeof v === 'number' && v >= f.min)) return false;
+  if (f.max != null && !(typeof v === 'number' && v <= f.max)) return false;
+  return true;
+}
+function passAll(r, exceptCol, skipTime, skipTrack){
+  for (const [col, f] of Object.entries(state.filters)) { if (col !== exceptCol && !passColFilter(r, col, f)) return false; }
+  if (state.offLink && state.siteOff.has(String(r[state.offLink]))) return false;   // 꺼진 레이더의 탐지 제외
+  if (!skipTime && (state.time || state.date) && !passTime(r)) return false;      // 시간대·기간
+  if (!skipTrack && state.trackOnly && !state.trackOnly.ids.has(r.__id)) return false;          // 특정 동선만
+  if (!skipTrack && state.pathIds && !state.pathIds.has(r.__id)) return false;                   // 이동 경로 있는 것만
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    if (!state.cols.some(c => String(r[c]).toLowerCase().includes(q))) return false;
+  }
+  if (state.bounds || state.radius) {
+    const ll = rowLatLng(r); if (!ll) return false;
+    if (state.bounds && !state.bounds.contains(ll)) return false;
+    if (state.radius && haversine(ll[0], ll[1], state.radius.lat, state.radius.lng) > state.radius.km) return false;
+  }
+  return true;
+}
+function haversine(a1, o1, a2, o2){
+  const R = 6371, d = Math.PI/180, dLat = (a2-a1)*d, dLng = (o2-o1)*d;
+  const h = Math.sin(dLat/2)**2 + Math.cos(a1*d)*Math.cos(a2*d)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(h));
+}
+
+function apply(fit){
+  state.offLink = state.sites && state.siteOff && state.siteOff.size ? siteLinkCol() : '';
+  // 1) 동선 관련 조건을 뺀 나머지 조건으로 거른 뒤 동선 계산
+  const base = state.rows.filter(r => passAll(r, null, false, true));
+  allTracks = computeTracks(base);
+  // 2) 이동 경로(2회 이상 이어진 동선)에 속한 탐지만
+  state.pathIds = state.pathOnly ? new Set(allTracks.filter(t => t.n >= 2).flatMap(t => t.pts.map(r => r.__id))) : null;
+  let out = base.filter(r => (!state.pathIds || state.pathIds.has(r.__id)) && (!state.trackOnly || state.trackOnly.ids.has(r.__id)));
+  if (state.sort) {
+    const {col, dir} = state.sort;
+    out = out.slice().sort((a,b) => cmp(a[col], b[col]) * dir);
+  }
+  state.filtered = out;
+  state.page = 0;
+  renderTable(); renderMap(fit); renderStats(); renderChips(); renderChart(); renderHourChart(); renderTracks();
+}
+function cmp(a,b){
+  if (a === '' && b !== '') return 1; if (b === '' && a !== '') return -1;
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), 'ko', {numeric:true});
+}
+
+/* ---------- 표적 종류별 아이콘 ---------- */
+const UNKNOWN_RED = '#dc2626';
+const TYPE_COLOR = {ship:'#2563eb', tanker:'#d97706', boat:'#0d9488', plane:'#7c3aed', unknown:UNKNOWN_RED};
+const TYPE_LABEL = {ship:'선박', tanker:'유조선', boat:'소형선박', plane:'항공기', unknown:'미상/특정불가'};
+const SHAPES = {
+  plane:  '<path d="M12 1.5c.9 0 1.5.8 1.5 1.8V9l8 4.6v2.2l-8-2.4v5.1l2.6 2v1.7L12 21.2l-4.1 1v-1.7l2.6-2v-5.1l-8 2.4v-2.2l8-4.6V3.3c0-1 .6-1.8 1.5-1.8z"/>',
+  ship:   '<path d="M2 14h20l-2.6 5.5H4.8z"/><path d="M5 13V9.5h3.5V13zM9.5 13V8H13v5zM14.5 13V4.5H17V7h2v6z"/>',
+  tanker: '<path d="M1 14h22l-2.4 5.5H3.6z"/><path d="M3 13v-2.5h2.5V8H8v5zM9.6 13a2.7 2.7 0 0 1 5.4 0zM16.2 13a2.5 2.5 0 0 1 5 0z"/>',
+  boat:   '<path d="M3 15h18l-3.2 4.5H6.2z"/><path d="M11 14V3.5l7 9.5h-7z"/>',
+  unknown:'<circle cx="12" cy="12" r="10"/><text x="12" y="16.9" text-anchor="middle" font-size="15" font-weight="800" fill="#fff" stroke="none" font-family="Arial,Helvetica,sans-serif">?</text>',
+};
+/* 값 → 모양. 어느 것에도 해당하지 않으면(특정 불가) 빨간 물음표 */
+function shapeOf(v){
+  const s = String(v ?? '').trim();
+  if (!s || /미상|불명|미확인|모름|unknown|unident|^\?+$/i.test(s)) return 'unknown';
+  if (/항공|비행|헬기|드론|aircraft|airplane|plane|jet|heli|uav|drone/i.test(s)) return 'plane';
+  if (/유조|탱커|tanker/i.test(s)) return 'tanker';
+  if (/소형|어선|보트|요트|boat|fishing|yacht|skiff/i.test(s)) return 'boat';
+  if (/선|함|ship|vessel|cargo|화물|여객|ferry/i.test(s)) return 'ship';
+  return 'unknown';
+}
+function svgIcon(shape, color, size){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${color}" stroke="#fff" stroke-width="1" stroke-linejoin="round">${SHAPES[shape]}</svg>`;
+}
+const iconCache = new Map();
+function targetIcon(shape, color){
+  const k = shape + color;
+  if (!iconCache.has(k)) iconCache.set(k, L.divIcon({className:'tgt-icon', html:svgIcon(shape, color, 22), iconSize:[22,22], iconAnchor:[11,11], popupAnchor:[0,-10]}));
+  return iconCache.get(k);
+}
+function markerColor(r, cc){
+  const ic = $('iconCol').value;
+  const shape = ic ? shapeOf(r[ic]) : null;
+  if (shape === 'unknown') return UNKNOWN_RED;                 // 특정 불가는 항상 빨강
+  if (cc && cc.col !== ic) return cc.color(r[cc.col]);
+  return shape ? TYPE_COLOR[shape] : (cc ? cc.color(r[cc.col]) : PALETTE[0]);
+}
+
+/* ---------- Category colors ---------- */
+function categoryColors(){
+  const col = $('catCol').value; if (!col) return null;
+  const counts = new Map();
+  state.rows.forEach(r => { const k = key(r[col]); counts.set(k, (counts.get(k)||0)+1); });
+  if (col === $('iconCol').value) {                            // 아이콘 기준과 같으면 종류별 고정색
+    const m = new Map([...counts.keys()].map(k => [k, TYPE_COLOR[shapeOf(k === BLANK ? '' : k)]]));
+    return {col, map:m, color: v => m.get(key(v)) || UNKNOWN_RED, hasOther:false};
+  }
+  const top = [...counts.entries()].sort((a,b) => b[1]-a[1]).slice(0, PALETTE.length).map(e => e[0]);
+  const m = new Map(top.map((k,i) => [k, PALETTE[i]]));
+  return {col, map:m, color: v => m.get(key(v)) || OTHER_COLOR, hasOther: counts.size > top.length};
+}
+
+/* ---------- Map render ---------- */
+function renderMap(fit){
+  if (layer) { map.removeLayer(layer); layer = null; }
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const cc = categoryColors();
+  const ic = $('iconCol').value;
+  const pts = [];
+  for (const r of state.filtered) { const ll = rowLatLng(r); if (ll) pts.push([ll, r]); }
+  const wcol = $('weightCol').value;
+
+  if (mode === 'heat') {
+    let maxW = 1;
+    if (wcol) maxW = Math.max(1, ...pts.map(([,r]) => Number(r[wcol]) || 0));
+    layer = L.heatLayer(pts.map(([ll, r]) => [ll[0], ll[1], wcol ? (Number(r[wcol])||0)/maxW : 0.6]), {radius:22, blur:18, maxZoom:15});
+  } else {
+    const group = mode === 'cluster' ? L.markerClusterGroup({chunkedLoading:true, showCoverageOnHover:false, maxClusterRadius:45}) : L.featureGroup();
+    const markers = pts.map(([ll, r]) => {
+      const color = markerColor(r, cc);
+      const m = ic ? L.marker(ll, {icon: targetIcon(shapeOf(r[ic]), color)})
+                   : L.circleMarker(ll, {radius:6, weight:1, color:'#fff', fillColor:color, fillOpacity:.85});
+      m.bindPopup(() => popupHtml(r));
+      return m;
+    });
+    if (mode === 'cluster') group.addLayers(markers); else markers.forEach(m => group.addLayer(m));
+    layer = group;
+  }
+  layer.addTo(map);
+  if (fit) {
+    const all = pts.map(p => p[0]).concat(sitePoints());
+    if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.1), {maxZoom:15});
+  }
+  renderLegend(cc);
+  renderSites();
+}
+function popupHtml(r){
+  const lab = $('labelCol').value, ic = $('iconCol').value;
+  const icon = ic ? svgIcon(shapeOf(r[ic]), markerColor(r, categoryColors()), 18) : '';
+  const title = lab ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">${icon}<b>${esc(r[lab])}</b></div>` : '';
+  const body = state.cols.slice(0, 12).map(c => `<span style="color:#6b7280">${esc(c)}</span>: ${esc(r[c])}`).join('<br>');
+  return `<div style="max-height:220px;overflow:auto;font-size:12px">${title}${body}</div>`;
+}
+function renderLegend(cc){
+  const el = $('legend'), heat = document.querySelector('input[name=mode]:checked').value === 'heat';
+  const ic = $('iconCol').value;
+  let h = '';
+  if (!heat && ic) {
+    const vals = [...new Set(state.rows.map(r => key(r[ic])))];
+    h += `<div class="muted">${esc(ic)} (아이콘)</div>` + vals.map(v => {
+      const shape = shapeOf(v === BLANK ? '' : v);
+      const color = shape === 'unknown' ? UNKNOWN_RED : (cc && cc.col !== ic ? '#64748b' : TYPE_COLOR[shape]);
+      return `<div>${svgIcon(shape, color, 16)}${esc(v)}</div>`;
+    }).join('');
+  }
+  if (!heat && cc && cc.col !== ic) {
+    h += `<div class="muted" style="margin-top:4px">${esc(cc.col)} (색상)</div>` +
+      [...cc.map.entries()].map(([k,c]) => `<div><i style="background:${c}"></i>${esc(k)}</div>`).join('') +
+      (cc.hasOther ? `<div><i style="background:${OTHER_COLOR}"></i>기타</div>` : '');
+  }
+  if (state.sites) h += `<div class="muted" style="margin-top:4px">레이더</div><div>${radarSvg(16)}레이더 기지 · 점선=탐지범위</div>`;
+  el.innerHTML = h;
+}
+
+/* ---------- 레이더 기지 ---------- */
+map.createPane('radarPane').style.zIndex = 650;
+let siteLayer = L.featureGroup().addTo(map), covLayer = L.featureGroup().addTo(map);
+function radarSvg(size){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16.5" fill="#0f172a" stroke="#4ade80" stroke-width="1.5"/>
+<circle cx="18" cy="18" r="11" fill="none" stroke="#4ade80" stroke-opacity=".45"/><circle cx="18" cy="18" r="5.5" fill="none" stroke="#4ade80" stroke-opacity=".45"/>
+<path d="M18 3v30M3 18h30" stroke="#4ade80" stroke-opacity=".25"/>
+<g class="sweep"><path d="M18 18L18 2.5A15.5 15.5 0 0 1 31.4 10.25Z" fill="#4ade80" fill-opacity=".55"/></g><circle cx="18" cy="18" r="2.2" fill="#4ade80"/></svg>`;
+}
+function radarOffSvg(size){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16.5" fill="#334155" stroke="#94a3b8" stroke-width="1.5"/>
+<circle cx="18" cy="18" r="11" fill="none" stroke="#94a3b8" stroke-opacity=".4"/><circle cx="18" cy="18" r="5.5" fill="none" stroke="#94a3b8" stroke-opacity=".4"/>
+<path d="M18 3v30M3 18h30" stroke="#94a3b8" stroke-opacity=".25"/><circle cx="18" cy="18" r="2.2" fill="#94a3b8"/></svg>`;
+}
+const radarOffIcon = L.divIcon({className:'radar-icon', html:radarOffSvg(36), iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-16]});
+const radarIcon = L.divIcon({className:'radar-icon', html:radarSvg(36), iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-16]});
+function setSites(raw, name){
+  const cols = []; raw.forEach(r => Object.keys(r).forEach(k => { if (!cols.includes(k)) cols.push(k); }));
+  const find = res => { for (const re of res) { const c = cols.find(c => re.test(String(c).trim())); if (c) return c; } return ''; };
+  const latC = find([/^(위도|lat|latitude|y)$/i, /위도|lat/i]), lngC = find([/^(경도|lng|lon|long|longitude|x)$/i, /경도|lng|lon/i]);
+  if (!latC || !lngC) { alert(`${name}: 위도/경도 컬럼을 찾지 못했습니다.`); return; }
+  const idC = find([/sensor_id|site_id|radar_id|기지|레이더|^id$/i, /id|명|name/i]) || cols[0];
+  const rangeC = find([RANGE_RE]);
+  const rows = raw.map(r => { const o = {}; cols.forEach(c => o[c] = normVal(r[c])); return o; })
+    .filter(r => isFinite(Number(r[latC])) && isFinite(Number(r[lngC])) && r[latC] !== '' && r[lngC] !== '');
+  state.sites = {rows, cols, latC, lngC, idC, rangeC, name};
+  state.siteOff = new Set();                                           // 꺼진 레이더 ID
+  $('siteOpts').style.display = ''; $('siteBulk').style.display = '';
+  apply(false);
+  renderLegend(categoryColors());
+  const all = sitePoints().concat(state.filtered.map(rowLatLng).filter(Boolean));
+  rows.forEach(r => { const km = Number(r[rangeC]); if (km > 0) { const c = L.latLng(+r[latC], +r[lngC]).toBounds(km * 2000); all.push(c.getSouthWest(), c.getNorthEast()); } });
+  if (all.length) map.fitBounds(L.latLngBounds(all).pad(0.05));
+}
+function sitePoints(){ return state.sites ? state.sites.rows.map(r => [+r[state.sites.latC], +r[state.sites.lngC]]) : []; }
+/* 이벤트 데이터에서 기지 ID와 연결되는 컬럼(예: sensor_id) */
+function siteLinkCol(){
+  const S = state.sites; if (!S || !state.rows.length) return '';
+  const ids = new Set(S.rows.map(r => String(r[S.idC])));
+  const cands = state.cols.includes(S.idC) ? [S.idC, ...state.cols] : state.cols;
+  return cands.find(c => state.rows.slice(0, 300).some(r => ids.has(String(r[c])))) || '';
+}
+const covCircles = new Map();   // 기지 ID → 탐지범위 원 (범위 수정 시 즉시 반영)
+function covStyle(){ return {color:'#16a34a', weight:1.5, dashArray:'6 6', fillColor:'#22c55e', fillOpacity:.05, interactive:false}; }
+function renderSites(){
+  siteLayer.clearLayers(); covLayer.clearLayers(); covCircles.clear();
+  const S = state.sites;
+  if (!S) { $('siteList').innerHTML = ''; return; }
+  const link = siteLinkCol(), counts = new Map();
+  if (link) state.filtered.forEach(r => { const k = String(r[link]); counts.set(k, (counts.get(k)||0)+1); });
+  const active = link && state.filters[link]?.values;
+  S.rows.forEach(r => {
+    const id = String(r[S.idC]), ll = [+r[S.latC], +r[S.lngC]], km = Number(r[S.rangeC]), on = !state.siteOff.has(id);
+    if (on && $('showCoverage').checked && km > 0)
+      covCircles.set(id, L.circle(ll, Object.assign({radius: km*1000}, covStyle())).addTo(covLayer));
+    if ($('showSites').checked) {
+      const m = L.marker(ll, {icon: on ? radarIcon : radarOffIcon, pane:'radarPane'}).addTo(siteLayer);
+      m.bindTooltip(esc(id) + (on ? '' : ' (꺼짐)'), {permanent:true, direction:'bottom', offset:[0,16], className:'radar-label' + (on ? '' : ' off')});
+      m.bindPopup(() => {
+        const body = S.cols.map(c => `<span style="color:#6b7280">${esc(c)}</span>: ${esc(r[c])}`).join('<br>');
+        const cnt = link && on ? `<div style="margin-top:6px"><b>탐지 ${(counts.get(id)||0).toLocaleString()}건</b> (현재 필터 기준)</div>
+          <button class="btn small" data-site="${esc(id)}" style="margin-top:6px">이 레이더 탐지만 보기</button>` : '';
+        const tg = `<button class="btn small" data-toggle="${esc(id)}" style="margin-top:6px">${on ? '레이더 끄기' : '레이더 켜기'}</button>`;
+        return `<div style="font-size:12px"><div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">${on ? radarSvg(18) : radarOffSvg(18)}<b>${esc(id)}</b>${on ? '' : ' <span style="color:#64748b">(꺼짐)</span>'}</div>${body}${cnt} ${tg}</div>`;
+      });
+    }
+  });
+  const offN = S.rows.filter(r => state.siteOff.has(String(r[S.idC]))).length;
+  $('siteInfo').textContent = `${S.name} · 기지 ${S.rows.length}개 (켜짐 ${S.rows.length - offN})` + (link ? ` · 연결 컬럼: ${link}` : (state.rows.length ? ' · 탐지 데이터와 연결되는 컬럼 없음' : ''));
+  $('siteList').innerHTML = S.rows.map(r => {
+    const id = String(r[S.idC]);
+    const on = !state.siteOff.has(id);
+    return `<div data-site="${esc(id)}" class="${active && active.has(id) ? 'on' : ''}${on ? '' : ' off'}">` +
+      `<label class="sw" title="레이더 켜기/끄기"><input type="checkbox" data-toggle="${esc(id)}" ${on ? 'checked' : ''}><i></i></label>` +
+      `${on ? radarSvg(16) : radarOffSvg(16)}<span>${esc(id)}</span>` +
+      (S.rangeC ? `<span class="muted" style="font-size:11px">${esc(r[S.rangeC])}km</span>` : '') +
+      (link ? `<span class="cnt">${on ? (counts.get(id)||0).toLocaleString() + '건' : '꺼짐'}</span>` : '') + '</div>';
+  }).join('');
+}
+function focusSite(id){
+  const S = state.sites, r = S.rows.find(r => String(r[S.idC]) === id); if (!r) return;
+  const link = siteLinkCol();
+  if (link) {
+    const f = state.filters[link];
+    if (f && f.values && f.values.size === 1 && f.values.has(id)) delete state.filters[link];   // 다시 누르면 해제
+    else state.filters[link] = {values:new Set([id]), contains:'', min:null, max:null};
+    apply(false);
+  }
+  const km = Number(r[S.rangeC]) || 20;
+  map.fitBounds(L.latLng(+r[S.latC], +r[S.lngC]).toBounds(km * 2000));
+}
+$('siteList').addEventListener('click', e => { if (e.target.closest('.sw')) return; const d = e.target.closest('[data-site]'); if (d) focusSite(d.dataset.site); });
+/* 레이더 켜기/끄기: 꺼진 레이더는 탐지범위 숨김 + 해당 레이더의 탐지 데이터 제외 */
+function toggleSite(id, on){
+  if (on === undefined) on = state.siteOff.has(id);
+  if (on) state.siteOff.delete(id); else state.siteOff.add(id);
+  apply(false);
+}
+$('siteList').addEventListener('change', e => { const t = e.target.closest('input[data-toggle]'); if (t) toggleSite(t.dataset.toggle, t.checked); });
+$('allOn').onclick = () => { state.siteOff.clear(); apply(false); };
+$('allOff').onclick = () => { const S = state.sites; S.rows.forEach(r => state.siteOff.add(String(r[S.idC]))); apply(false); };
+map.on('popupopen', e => {
+  const el = e.popup.getElement();
+  const b = el.querySelector('button[data-site]'); if (b) b.onclick = () => { map.closePopup(); focusSite(b.dataset.site); };
+  const t = el.querySelector('button[data-toggle]'); if (t) t.onclick = () => { map.closePopup(); toggleSite(t.dataset.toggle); };
+});
+$('showSites').onchange = $('showCoverage').onchange = () => renderSites();
+$('clearSites').onclick = () => { state.sites = null; state.siteOff = new Set(); apply(false); $('siteOpts').style.display = 'none'; $('siteBulk').style.display = 'none'; $('siteInfo').textContent = '기지 파일을 다시 불러올 수 있습니다.'; renderSites(); renderLegend(categoryColors()); };
+document.querySelectorAll('input[name=mode]').forEach(r => r.onchange = () => renderMap(false));
+$('fitBtn').onclick = () => {
+  const pts = state.filtered.map(rowLatLng).filter(Boolean);
+  if (pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.1), {maxZoom:15});
+};
+$('boundsBtn').onclick = () => { state.bounds = map.getBounds(); apply(false); };
+
+/* radius */
+$('radiusBtn').onclick = () => {
+  pickingCenter = true; map.getContainer().style.cursor = 'crosshair';
+  $('radiusInfo').textContent = '지도에서 중심점을 클릭하세요';
+};
+map.on('click', e => {
+  if (!pickingCenter) return;
+  pickingCenter = false; map.getContainer().style.cursor = '';
+  setRadius(e.latlng.lat, e.latlng.lng);
+});
+$('radiusKm').onchange = () => { if (state.radius) setRadius(state.radius.lat, state.radius.lng); };
+function setRadius(lat, lng){
+  const km = Math.max(0.05, Number($('radiusKm').value) || 1);
+  state.radius = {lat, lng, km};
+  if (radiusCircle) map.removeLayer(radiusCircle);
+  radiusCircle = L.circle([lat,lng], {radius: km*1000, color:'#dc2626', weight:2, fillOpacity:.06, interactive:false}).addTo(map);
+  apply(false);
+  $('radiusInfo').textContent = `중심 ${lat.toFixed(5)}, ${lng.toFixed(5)} · 반경 ${km}km 내 ${state.filtered.length.toLocaleString()}건`;
+}
+
+/* ---------- Stats ---------- */
+function renderStats(){
+  $('sTotal').textContent = state.rows.length.toLocaleString();
+  $('sFiltered').textContent = state.filtered.length.toLocaleString();
+  const pts = state.filtered.map(rowLatLng).filter(Boolean);
+  $('sValid').textContent = pts.length.toLocaleString();
+  const w = $('weightCol').value;
+  $('sWeight').textContent = w ? state.filtered.reduce((s,r) => s + (Number(r[w])||0), 0).toLocaleString(undefined,{maximumFractionDigits:2}) : '-';
+  if (pts.length) {
+    const cLat = pts.reduce((s,p)=>s+p[0],0)/pts.length, cLng = pts.reduce((s,p)=>s+p[1],0)/pts.length;
+    const b = L.latLngBounds(pts);
+    const wKm = haversine(cLat, b.getWest(), cLat, b.getEast()), hKm = haversine(b.getSouth(), cLng, b.getNorth(), cLng);
+    $('sCenter').innerHTML = `중심점 ${cLat.toFixed(5)}, ${cLng.toFixed(5)}<br>분포 범위 약 ${wKm.toFixed(1)}km × ${hKm.toFixed(1)}km`;
+  } else $('sCenter').textContent = state.rows.length ? '유효한 좌표가 없습니다. 위도/경도 컬럼을 확인하세요.' : '';
+}
+
+/* ---------- Chart ---------- */
+let chart = null;
+function renderChart(){
+  const col = $('catCol').value;
+  const cc = categoryColors();
+  const counts = new Map();
+  if (col) state.filtered.forEach(r => { const k = key(r[col]); counts.set(k, (counts.get(k)||0)+1); });
+  const top = [...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 10);
+  const css = getComputedStyle(document.documentElement);
+  const data = {labels: top.map(t=>t[0]), datasets:[{data: top.map(t=>t[1]), backgroundColor: top.map(t => cc ? (cc.map.get(t[0])||OTHER_COLOR) : PALETTE[0]), borderRadius:4}]};
+  if (chart) { chart.data = data; chart.update(); return; }
+  chart = new Chart($('chart'), {type:'bar', data, options:{
+    indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales:{x:{ticks:{color:css.getPropertyValue('--muted')}, grid:{color:css.getPropertyValue('--line')}}, y:{ticks:{color:css.getPropertyValue('--text'), autoSkip:false}, grid:{display:false}}},
+    onClick: (e, els) => { if (!els.length || !col) return; const v = data.labels[els[0].index]; state.filters[col] = {values:new Set([v]), contains:'', min:null, max:null}; apply(true); }
+  }});
+}
+
+/* ---------- Table ---------- */
+function renderTable(){
+  const thead = $('tbl').querySelector('thead'), tbody = $('tbl').querySelector('tbody');
+  if (!state.cols.length) { thead.innerHTML=''; tbody.innerHTML = `<tr><td class="empty">엑셀 파일을 불러오거나 샘플 데이터를 눌러보세요.</td></tr>`; $('pgInfo').textContent=''; $('tblInfo').textContent=''; return; }
+  thead.innerHTML = '<tr>' + state.cols.map(c => {
+    const on = state.filters[c] ? ' on' : '';
+    const s = state.sort && state.sort.col === c ? (state.sort.dir > 0 ? ' ↑' : ' ↓') : '';
+    return `<th><div class="th"><span class="name" data-sort="${esc(c)}">${esc(c)}${s}</span><button class="fbtn${on}" data-col="${esc(c)}" title="필터">▼</button></div></th>`;
+  }).join('') + '</tr>';
+  const size = Number($('pageSize').value), pages = Math.max(1, Math.ceil(state.filtered.length/size));
+  state.page = Math.min(state.page, pages-1);
+  const slice = state.filtered.slice(state.page*size, (state.page+1)*size);
+  tbody.innerHTML = slice.map(r => `<tr data-id="${r.__id}">` + state.cols.map(c => `<td title="${esc(r[c])}">${esc(fmt(r[c]))}</td>`).join('') + '</tr>').join('')
+    || `<tr><td class="empty" colspan="${state.cols.length}">조건에 맞는 데이터가 없습니다.</td></tr>`;
+  $('pgInfo').textContent = `${state.page+1} / ${pages}`;
+  $('tblInfo').textContent = `${state.filtered.length.toLocaleString()}행 / ${state.cols.length}열`;
+  $('prevPg').disabled = state.page === 0; $('nextPg').disabled = state.page >= pages-1;
+}
+function fmt(v){ return typeof v === 'number' && !Number.isInteger(v) ? +v.toFixed(6) : v; }
+$('prevPg').onclick = () => { state.page--; renderTable(); };
+$('nextPg').onclick = () => { state.page++; renderTable(); };
+$('pageSize').onchange = () => { state.page = 0; renderTable(); };
+let searchT; $('globalSearch').oninput = e => { clearTimeout(searchT); searchT = setTimeout(() => { state.search = e.target.value.trim(); apply(false); }, 250); };
+
+$('tbl').addEventListener('click', e => {
+  const fb = e.target.closest('.fbtn'); if (fb) { openFilter(fb.dataset.col, fb); return; }
+  const sn = e.target.closest('[data-sort]');
+  if (sn) { const c = sn.dataset.sort; state.sort = state.sort && state.sort.col === c ? (state.sort.dir > 0 ? {col:c, dir:-1} : null) : {col:c, dir:1}; apply(false); return; }
+  const tr = e.target.closest('tr[data-id]');
+  if (tr) {
+    const r = state.rows[Number(tr.dataset.id)], ll = rowLatLng(r);
+    if (ll) { map.setView(ll, Math.max(map.getZoom(), 16)); L.popup().setLatLng(ll).setContent(popupHtml(r)).openOn(map); }
+  }
+});
+
+/* ---------- Excel-style autofilter popup ---------- */
+let fpCol = null, fpChecked = null, fpValues = [];
+function openFilter(col, anchor){
+  fpCol = col;
+  const f = state.filters[col] || {};
+  // values available given the OTHER filters (cascading like Excel)
+  const counts = new Map();
+  state.rows.forEach(r => { if (passAll(r, col)) { const k = key(r[col]); counts.set(k, (counts.get(k)||0)+1); } });
+  const isNum = state.numericCols.has(col);
+  fpValues = [...counts.entries()].sort((a,b) => a[0] === BLANK ? 1 : b[0] === BLANK ? -1 : cmp(isNum ? Number(a[0]) : a[0], isNum ? Number(b[0]) : b[0]));
+  fpChecked = new Set(f.values ? [...f.values] : fpValues.map(v => v[0]));
+  $('fpTitle').textContent = col;
+  $('fpSearch').value = '';
+  $('fpContains').value = f.contains || '';
+  $('fpMin').value = f.min ?? ''; $('fpMax').value = f.max ?? '';
+  $('fpNumWrap').style.display = isNum ? '' : 'none';
+  fpLastIdx = null;
+  drawFpList();
+  if (isNum) setupSlider();
+  const pop = $('fpop'); pop.style.display = 'block';
+  const r = anchor.getBoundingClientRect();
+  const left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 8);
+  let top = r.bottom + 4; if (top + pop.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - pop.offsetHeight - 4);
+  pop.style.left = Math.max(8, left) + 'px'; pop.style.top = top + 'px';
+  $('fpSearch').focus();
+}
+const MAX_LIST = 1000;
+let fpVis = [], fpLastIdx = null, fpNum = null;
+function drawFpList(){
+  const q = $('fpSearch').value.toLowerCase();
+  const vis = fpValues.filter(([v]) => !q || v.toLowerCase().includes(q));
+  fpVis = vis.slice(0, MAX_LIST).map(e => e[0]);
+  $('fpList').innerHTML = vis.slice(0, MAX_LIST).map(([v,n], i) =>
+    `<label data-i="${i}"><input type="checkbox" data-v="${esc(v)}" ${fpChecked.has(v)?'checked':''}><span>${esc(v)}</span><span class="cnt">${n.toLocaleString()}</span></label>`).join('')
+    + (vis.length > MAX_LIST ? `<div class="muted" style="padding:4px">… ${(vis.length-MAX_LIST).toLocaleString()}개 더 (검색으로 좁혀보세요)</div>` : '')
+    + (!vis.length ? '<div class="muted" style="padding:4px">값 없음</div>' : '');
+}
+$('fpSearch').oninput = drawFpList;
+$('fpList').addEventListener('change', e => { const v = e.target.dataset.v; e.target.checked ? fpChecked.add(v) : fpChecked.delete(v); });
+/* Shift+클릭: 마지막으로 누른 값과 이번 값 사이를 한 번에 체크/해제 */
+$('fpList').addEventListener('click', e => {
+  const lab = e.target.closest('label[data-i]'); if (!lab) return;
+  const i = +lab.dataset.i;
+  if (e.shiftKey && fpLastIdx != null && fpLastIdx !== i) {
+    e.preventDefault();
+    const on = !fpChecked.has(fpVis[i]);
+    for (let k = Math.min(i, fpLastIdx); k <= Math.max(i, fpLastIdx); k++) on ? fpChecked.add(fpVis[k]) : fpChecked.delete(fpVis[k]);
+    drawFpList();
+  }
+  fpLastIdx = i;
+});
+/* 숫자 범위 슬라이더 (히스토그램 + 양쪽 핸들) */
+function setupSlider(){
+  const nums = fpValues.filter(([v]) => v !== BLANK).map(([v, n]) => [Number(v), n]).filter(([v]) => isFinite(v));
+  if (!nums.length) { fpNum = null; return; }
+  const lo = Math.min(...nums.map(x => x[0])), hi = Math.max(...nums.map(x => x[0]));
+  const dec = Math.min(4, Math.max(0, ...nums.map(([v]) => (String(v).split('.')[1] || '').length)));
+  const B = 30, bins = new Array(B).fill(0);
+  nums.forEach(([v, n]) => bins[hi === lo ? 0 : Math.min(B - 1, Math.floor((v - lo) / (hi - lo) * B))] += n);
+  fpNum = {lo, hi, dec, nums, bins, B};
+  const max = Math.max(...bins);
+  $('fpHist').innerHTML = bins.map(b => `<div style="height:${b ? Math.max(4, b / max * 100) : 0}%"></div>`).join('');
+  $('fpLoLbl').textContent = fmtNum(lo); $('fpHiLbl').textContent = fmtNum(hi);
+  syncSliderFromInputs(false);
+}
+const fmtNum = v => fpNum ? Number(v).toFixed(fpNum.dec).replace(/\.0+$/, '') : String(v);
+const s2v = s => fpNum.hi === fpNum.lo ? fpNum.lo : +(fpNum.lo + (fpNum.hi - fpNum.lo) * s / 1000).toFixed(fpNum.dec);
+const v2s = v => fpNum.hi === fpNum.lo ? 0 : Math.round((v - fpNum.lo) / (fpNum.hi - fpNum.lo) * 1000);
+function syncSliderFromInputs(syncChecks){
+  if (!fpNum) return;
+  const a = $('fpMin').value === '' ? fpNum.lo : Number($('fpMin').value), b = $('fpMax').value === '' ? fpNum.hi : Number($('fpMax').value);
+  $('fpLo').value = Math.max(0, Math.min(1000, v2s(a))); $('fpHi').value = Math.max(0, Math.min(1000, v2s(b)));
+  updateRangeUI(a, b, syncChecks);
+}
+function updateRangeUI(a, b, syncChecks){
+  const {lo, hi, B, nums} = fpNum;
+  [...$('fpHist').children].forEach((d, i) => {
+    const s = lo + (hi - lo) * i / B, e = lo + (hi - lo) * (i + 1) / B;
+    d.classList.toggle('in', e >= a && s <= b);
+  });
+  const cnt = nums.reduce((t, [v, n]) => t + (v >= a && v <= b ? n : 0), 0);
+  $('fpRangeCnt').textContent = `${fmtNum(a)} ~ ${fmtNum(b)} · ${cnt.toLocaleString()}건`;
+  if (syncChecks) {            // 범위 안의 값만 체크
+    fpChecked = new Set(fpValues.filter(([v]) => v !== BLANK && Number(v) >= a && Number(v) <= b).map(e => e[0]));
+    drawFpList();
+  }
+}
+function onSlide(e){
+  let l = +$('fpLo').value, h = +$('fpHi').value;
+  if (l > h) { if (e.target.id === 'fpLo') l = h; else h = l; $('fpLo').value = l; $('fpHi').value = h; }
+  const a = s2v(l), b = s2v(h);
+  $('fpMin').value = l === 0 ? '' : a; $('fpMax').value = h === 1000 ? '' : b;
+  updateRangeUI(l === 0 ? fpNum.lo : a, h === 1000 ? fpNum.hi : b, true);
+}
+$('fpLo').oninput = $('fpHi').oninput = onSlide;
+$('fpMin').oninput = $('fpMax').oninput = () => syncSliderFromInputs(true);
+$('fpAll').onclick = () => { fpValues.forEach(([v]) => fpChecked.add(v)); drawFpList(); };
+$('fpNone').onclick = () => { fpChecked.clear(); drawFpList(); };
+$('fpOnlyVisible').onclick = () => { const q = $('fpSearch').value.toLowerCase(); fpChecked = new Set(fpValues.filter(([v]) => v.toLowerCase().includes(q)).map(e=>e[0])); drawFpList(); };
+$('fpClose').onclick = closeFilter;
+$('fpReset').onclick = () => { delete state.filters[fpCol]; closeFilter(); apply(true); };
+$('fpSortAsc').onclick = () => { state.sort = {col:fpCol, dir:1}; closeFilter(); apply(false); };
+$('fpSortDesc').onclick = () => { state.sort = {col:fpCol, dir:-1}; closeFilter(); apply(false); };
+$('fpApply').onclick = () => {
+  const allChecked = fpValues.every(([v]) => fpChecked.has(v));
+  const mn = $('fpMin').value === '' ? null : Number($('fpMin').value), mx = $('fpMax').value === '' ? null : Number($('fpMax').value);
+  // 체크 상태가 숫자 범위와 똑같으면 범위 조건만 저장
+  const sameAsRange = (mn != null || mx != null) && fpValues.every(([v]) => {
+    const inR = v !== BLANK && (mn == null || Number(v) >= mn) && (mx == null || Number(v) <= mx);
+    return fpChecked.has(v) === inR;
+  });
+  const f = {
+    values: allChecked || sameAsRange ? null : new Set(fpChecked),
+    contains: $('fpContains').value.trim(),
+    min: $('fpMin').value === '' ? null : Number($('fpMin').value),
+    max: $('fpMax').value === '' ? null : Number($('fpMax').value),
+  };
+  if (!f.values && !f.contains && f.min == null && f.max == null) delete state.filters[fpCol]; else state.filters[fpCol] = f;
+  closeFilter(); apply(true);
+};
+$('fpSearch').addEventListener('keydown', e => { if (e.key === 'Enter') $('fpApply').click(); });
+function closeFilter(){ $('fpop').style.display = 'none'; fpCol = null; }
+document.addEventListener('mousedown', e => { if ($('fpop').style.display === 'block' && !e.target.closest('#fpop') && !e.target.closest('.fbtn')) closeFilter(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFilter(); });
+
+/* ---------- Chips ---------- */
+function renderChips(){
+  const chips = [];
+  for (const [c, f] of Object.entries(state.filters)) {
+    const parts = [];
+    if (f.values) parts.push(f.values.size <= 2 ? [...f.values].join(', ') : `${f.values.size}개 값`);
+    if (f.contains) parts.push(`"${f.contains}" 포함`);
+    if (f.min != null || f.max != null) parts.push(`${f.min ?? ''}~${f.max ?? ''}`);
+    chips.push(`<span class="chip">${esc(c)}: ${esc(parts.join(' · '))}<button data-rm="col:${esc(c)}">✕</button></span>`);
+  }
+  if (state.bounds) chips.push(`<span class="chip">지도 화면 영역<button data-rm="bounds">✕</button></span>`);
+  if (state.radius) chips.push(`<span class="chip">반경 ${state.radius.km}km<button data-rm="radius">✕</button></span>`);
+  if (state.offLink) chips.push(`<span class="chip">꺼진 레이더: ${esc([...state.siteOff].join(', '))}<button data-rm="radarsOff">✕</button></span>`);
+  if (state.pathOnly) chips.push(`<span class="chip">이동 경로 있는 것만<button data-rm="pathOnly">✕</button></span>`);
+  if (state.trackOnly) chips.push(`<span class="chip">동선 ${esc(state.trackOnly.id)}만<button data-rm="trackOnly">✕</button></span>`);
+  if (state.time) chips.push(`<span class="chip">시간대 ${fmtMin(state.time.start)}~${fmtMin(state.time.end)}<button data-rm="time">✕</button></span>`);
+  if (state.date) chips.push(`<span class="chip">기간 ${esc(state.date.from || '…')}~${esc(state.date.to || '…')}<button data-rm="date">✕</button></span>`);
+  if (state.search) chips.push(`<span class="chip">검색: ${esc(state.search)}<button data-rm="search">✕</button></span>`);
+  $('chips').innerHTML = chips.join('') || '<span class="muted">없음</span>';
+}
+$('chips').addEventListener('click', e => {
+  const rm = e.target.dataset.rm; if (!rm) return;
+  if (rm.startsWith('col:')) delete state.filters[rm.slice(4)];
+  else if (rm === 'bounds') state.bounds = null;
+  else if (rm === 'radarsOff') state.siteOff.clear();
+  else if (rm === 'trackOnly') state.trackOnly = null;
+  else if (rm === 'pathOnly') setPathOnly(false, true);
+  else if (rm === 'time') { state.time = null; $('tStart').value = $('tEnd').value = ''; }
+  else if (rm === 'date') { state.date = null; $('dFrom').value = $('dTo').value = ''; }
+  else if (rm === 'radius') clearRadius();
+  else if (rm === 'search') { state.search = ''; $('globalSearch').value = ''; }
+  apply(false);
+});
+function clearRadius(){ state.radius = null; if (radiusCircle) { map.removeLayer(radiusCircle); radiusCircle = null; } $('radiusInfo').textContent = ''; }
+$('clearAll').onclick = () => { state.trackOnly = null; setPathOnly(false, true); if (state.siteOff) state.siteOff.clear(); state.time = null; state.date = null; ['tStart','tEnd','dFrom','dTo'].forEach(id => $(id).value = ''); state.filters = {}; state.bounds = null; clearRadius(); state.search=''; $('globalSearch').value=''; apply(true); };
+
+/* ---------- Export ---------- */
+function filteredAoA(){ return [state.cols, ...state.filtered.map(r => state.cols.map(c => r[c]))]; }
+$('exportXlsx').onclick = () => {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filteredAoA()), '필터결과');
+  XLSX.writeFile(wb, `위치데이터_필터결과_${stamp()}.xlsx`);
+};
+$('exportCsv').onclick = () => {
+  const csv = XLSX.utils.sheet_to_csv(XLSX.utils.aoa_to_sheet(filteredAoA()));
+  const blob = new Blob(['﻿' + csv], {type:'text/csv;charset=utf-8'}); // BOM: 엑셀에서 한글 깨짐 방지
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `위치데이터_필터결과_${stamp()}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+function stamp(){ const d = new Date(); return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0'); }
+
+/* ---------- Sample data ---------- */
+$('sampleBtn').onclick = () => {
+  const gu = [['강남구',37.5172,127.0473],['서초구',37.4837,127.0324],['송파구',37.5145,127.1059],['마포구',37.5663,126.9019],['종로구',37.5735,126.9790],['영등포구',37.5264,126.8962],['성동구',37.5634,127.0369],['용산구',37.5324,126.9900]];
+  const types = ['카페','음식점','편의점','약국','병원','학원','미용실'];
+  let seed = 42; const rnd = () => (seed = (seed*16807) % 2147483647) / 2147483647;
+  const raw = [];
+  for (let i = 0; i < 1500; i++) {
+    const g = gu[Math.floor(rnd()*gu.length)], t = types[Math.floor(Math.pow(rnd(),1.6)*types.length)];
+    raw.push({'상호명': `${t} ${i+1}호점`, '업종': t, '자치구': g[0],
+      '위도': +(g[1] + (rnd()-.5)*0.035).toFixed(6), '경도': +(g[2] + (rnd()-.5)*0.045).toFixed(6),
+      '월매출(만원)': Math.round(500 + rnd()*rnd()*9000), '개업연도': 2005 + Math.floor(rnd()*20)});
+  }
+  state.wb = null; $('sheetSel').style.display = 'none';
+  setData(raw);
+};
+
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+renderTable();
+})();
+</script>
+</body>
+</html>
